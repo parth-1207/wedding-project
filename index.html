@@ -1,0 +1,74 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shaadi Planner</title>
+<style>
+:root{--bg:#fffaf5;--cd:#fff;--tx:#2b2220;--mu:#8a7b75;--bd:#eadfd6;--ac:#b4373d;--Haldi:#e8a317;--Sangeet:#7b4bb5;--Marriage:#c2185b}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1514;--cd:#262020;--tx:#f3e9e4;--mu:#a8978f;--bd:#3a302e;--ac:#e5646a}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:70px}
+main{max-width:720px;margin:auto;padding:14px}h1{font:600 20px Georgia,serif;margin:0 0 4px}h2{font-size:16px;margin:16px 0 8px}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:10px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--cd);border-top:1px solid var(--bd)}
+nav button{flex:1;border:0;background:none;color:var(--mu);padding:12px 0;font-size:12px}nav button.on{color:var(--ac);font-weight:700}
+input,select,textarea,button.b{font:inherit;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);max-width:100%}
+button.b{background:var(--ac);color:#fff;border:0;cursor:pointer}button.g{background:none;border:1px solid var(--bd);color:var(--tx)}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}.row>*{flex:1;min-width:110px}
+.t{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd)}.t:last-child{border:0}.t div{flex:1}
+.t small,.mu{color:var(--mu)}.pill{font-size:11px;color:#fff;border-radius:99px;padding:2px 8px}.od{color:var(--ac);font-weight:600}
+.bar{height:8px;background:var(--bd);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.cal div{min-height:58px;background:var(--cd);border:1px solid var(--bd);border-radius:6px;padding:2px;font-size:10px;overflow:hidden}
+.cal .h{min-height:0;border:0;background:none;text-align:center;color:var(--mu)}.cal .td{border-color:var(--ac)}.cal span{display:block;color:#fff;border-radius:3px;padding:0 3px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chips button{flex:none;min-width:0}.x{border:0;background:none;color:var(--mu);font-size:18px}
+</style></head><body><main id="app"></main>
+<nav id="nav"></nav>
+<script>
+const FN=["Haldi","Sangeet","Marriage"],TABS=[["home","🏠 Home"],["tasks","✅ Tasks"],["cal","📅 Calendar"],["money","💰 Budget"],["guests","👥 Guests"],["set","⚙️ Setup"]];
+const $=s=>document.querySelector(s),uid=()=>Math.random().toString(36).slice(2,9),iso=d=>d.toISOString().slice(0,10);
+const addD=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return iso(x)};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const T=iso(new Date()),dd=d=>Math.round((new Date(d)-new Date(T))/864e5);
+let S=JSON.parse(localStorage.ws||"null")||{couple:{names:"Couple Names",emails:""},budget:0,team:"",dates:{Haldi:addD(T,58),Sangeet:addD(T,59),Marriage:addD(T,60)},tasks:[],spend:[],guests:[]};
+let tab="home",flt="All",cm=new Date(T.slice(0,8)+"01"),pre="",tm=0;
+const key=()=>localStorage.key_;
+function save(){localStorage.ws=JSON.stringify(S);if(key()){clearTimeout(tm);tm=setTimeout(()=>fetch("/api/state",{method:"POST",headers:{"x-key":key()},body:JSON.stringify(S)}).catch(()=>{}),800)}}
+async function pull(){if(!key())return;try{const r=await fetch("/api/state",{headers:{"x-key":key()}});if(r.ok){const j=await r.json();if(j){S=j;localStorage.ws=JSON.stringify(S);go(tab)}}}catch(e){}}
+const owners=()=>[...new Set(S.team.split("\n").map(l=>l.split(",")[0].trim()).filter(Boolean))];
+const st=t=>t.status==="done"?"":dd(t.due)<0?`<b class=od>Overdue ${-dd(t.due)}d</b>`:dd(t.due)===0?`<b class=od>Today</b>`:`in ${dd(t.due)}d`;
+const pill=f=>`<span class=pill style="background:var(--${f})">${f}</span>`;
+function taskRow(t){return `<div class=t><input type=checkbox ${t.status==="done"?"checked":""} onchange="tog('${t.id}')"><div><span style="${t.status==="done"?"text-decoration:line-through;opacity:.5":""}">${esc(t.title)}</span><br><small>${pill(t.fn)} ${esc(t.owner||"Unassigned")} · ${t.due} · ${st(t)}</small></div><button class=x onclick="del('tasks','${t.id}')">×</button></div>`}
+function home(){const days=dd(S.dates.Marriage);let h=`<h1>${esc(S.couple.names)}</h1><div class=mu>${days>0?days+" days to the wedding 🎉":days===0?"It's the wedding day! 🎊":"Congratulations! 🎊"}</div>`;
+h+=FN.map(f=>{const a=S.tasks.filter(t=>t.fn===f),d=a.filter(t=>t.status==="done").length;return `<div class=card>${pill(f)} <b>${S.dates[f]}</b> <span class=mu>· ${d}/${a.length} done</span><div class=bar style="margin-top:8px"><i style="width:${a.length?d/a.length*100:0}%;background:var(--${f})"></i></div></div>`}).join("");
+const op=S.tasks.filter(t=>t.status!=="done").sort((a,b)=>a.due.localeCompare(b.due)).slice(0,8);
+h+=`<h2>Needs attention</h2><div class=card>${op.map(taskRow).join("")||"<span class=mu>Nothing pending 🎉</span>"}</div>`;
+const sp=S.spend.reduce((a,x)=>a+ +x.paid,0),es=S.spend.reduce((a,x)=>a+ +x.est,0),rs=S.guests.filter(g=>g.rsvp==="Yes").reduce((a,g)=>a+ +g.n,0);
+return h+`<div class=row><div class=card>💰 Paid ₹${sp.toLocaleString("en-IN")}<br><small class=mu>of ₹${(+S.budget||es).toLocaleString("en-IN")}</small></div><div class=card>👥 ${rs} confirmed<br><small class=mu>${S.guests.reduce((a,g)=>a+ +g.n,0)} invited</small></div></div>`}
+function tasks(){const l=S.tasks.filter(t=>flt==="All"||t.fn===flt).sort((a,b)=>(a.status==="done")-(b.status==="done")||a.due.localeCompare(b.due));
+return `<h1>Tasks</h1><div class="row chips">${["All",...FN].map(f=>`<button class="b ${f===flt?"":"g"}" onclick="flt='${f}';go('tasks')">${f}</button>`).join("")}</div>
+<div class=card><div class=row><input id=nt placeholder="New task" value="${esc(pre.t||"")}" style="flex:3"><select id=nf>${FN.map(f=>`<option ${f===(pre.f||flt)?"selected":""}>${f}</option>`).join("")}</select></div>
+<div class=row><input id=no list=ol placeholder="Owner"><datalist id=ol>${owners().map(o=>`<option>${esc(o)}</option>`).join("")}</datalist><input id=nd type=date value="${pre.d||S.dates[flt==="All"?"Haldi":flt]}"><button class=b onclick="addT()">Add</button></div>
+${S.tasks.length?"":`<button class="b g" onclick="starter()">Load starter checklist</button>`}</div><div class=card>${l.map(taskRow).join("")||"<span class=mu>No tasks yet</span>"}</div>`}
+function cal(){const y=cm.getFullYear(),m=cm.getMonth(),first=cm.getDay(),n=new Date(y,m+1,0).getDate();let c=["S","M","T","W","T","F","S"].map(x=>`<div class=h>${x}</div>`).join("")+"<div style=visibility:hidden></div>".repeat(first);
+for(let i=1;i<=n;i++){const d=`${y}-${String(m+1).padStart(2,"0")}-${String(i).padStart(2,"0")}`;c+=`<div class="${d===T?"td":""}" onclick="pre={d:'${d}'};go('tasks')">${i}${FN.filter(f=>S.dates[f]===d).map(f=>`<span style="background:var(--${f})">★ ${f}</span>`).join("")}${S.tasks.filter(t=>t.due===d).map(t=>`<span style="background:var(--${t.fn});${t.status==="done"?"opacity:.4":""}">${esc(t.title)}</span>`).join("")}</div>`}
+return `<h1>Calendar</h1><div class=row style="align-items:center"><button class="b g" onclick="cm=new Date(${y},${m-1},1);go('cal')">‹</button><b style="text-align:center">${cm.toLocaleString("en",{month:"long",year:"numeric"})}</b><button class="b g" onclick="cm=new Date(${y},${m+1},1);go('cal')">›</button></div><div class=cal>${c}</div><p class=mu>Tap a day to add a task. <a href="#" onclick="ics();return false">Add to phone calendar (.ics)</a></p>`}
+function money(){const tot=S.spend.reduce((a,x)=>a+ +x.est,0),p=S.spend.reduce((a,x)=>a+ +x.paid,0);
+return `<h1>Budget</h1><div class=card><div class=row><input id=bi placeholder="Item (e.g. Decorator)" style="flex:2"><select id=bf>${FN.map(f=>`<option>${f}</option>`).join("")}</select></div><div class=row><input id=be type=number placeholder="Estimate ₹"><input id=bp type=number placeholder="Paid ₹"><button class=b onclick="addB()">Add</button></div></div>
+<div class=card><b>Estimated ₹${tot.toLocaleString("en-IN")} · Paid ₹${p.toLocaleString("en-IN")} · Due ₹${(tot-p).toLocaleString("en-IN")}</b>${S.budget&&tot>S.budget?`<br><b class=od>Over budget by ₹${(tot-S.budget).toLocaleString("en-IN")}</b>`:""}${S.spend.map(x=>`<div class=t><div>${esc(x.i)}<br><small>${pill(x.f)} ₹${(+x.paid).toLocaleString("en-IN")} / ₹${(+x.est).toLocaleString("en-IN")}</small></div><button class=x onclick="del('spend','${x.id}')">×</button></div>`).join("")}</div>`}
+function guests(){const c=["Pending","Yes","No"];return `<h1>Guests</h1><div class=card><div class=row><input id=gn placeholder="Guest / family name" style="flex:2"><input id=gc type=number value=1 min=1><select id=gs><option>Bride side</option><option>Groom side</option></select><button class=b onclick="addG()">Add</button></div></div><div class=card>${S.guests.map(g=>`<div class=t><div>${esc(g.name)} <small>(${g.n}) · ${g.side}</small></div><button class="b ${g.rsvp==="Yes"?"":"g"}" onclick="rs('${g.id}')">${g.rsvp}</button><button class=x onclick="del('guests','${g.id}')">×</button></div>`).join("")||"<span class=mu>No guests yet</span>"}</div>`}
+function set(){return `<h1>Setup</h1><div class=card><b>Couple</b><div class=row><input value="${esc(S.couple.names)}" onchange="S.couple.names=this.value;save()"><input placeholder="Couple emails (comma separated)" value="${esc(S.couple.emails)}" onchange="S.couple.emails=this.value;save()"></div><div class=row><input type=number placeholder="Total budget ₹" value="${S.budget||""}" onchange="S.budget=+this.value;save()"></div></div>
+<div class=card><b>Function dates</b>${FN.map(f=>`<div class=row>${pill(f)}<input type=date value="${S.dates[f]}" onchange="S.dates['${f}']=this.value;save()"></div>`).join("")}</div>
+<div class=card><b>Team (one per line: Name, email)</b><textarea rows=4 style="width:100%" onchange="S.team=this.value;save()">${esc(S.team)}</textarea></div>
+<div class=card><b>Shared sync passcode</b><div class=row><input id=pk type=password value="${esc(key()||"")}" placeholder="Same as APP_PASSCODE"><button class=b onclick="localStorage.key_=$('#pk').value;save();pull()">Connect</button></div><div class=row><button class="b g" onclick="exp()">Export backup</button><button class="b g" onclick="$('#f').click()">Import backup</button><input id=f type=file hidden onchange="imp(this)"></div></div>`}
+const V={home,tasks,cal,money,guests,set};
+function go(t){tab=t;$("#app").innerHTML=V[t]();$("#nav").innerHTML=TABS.map(([k,l])=>`<button class="${k===t?"on":""}" onclick="go('${k}')">${l.replace(" ","<br>")}</button>`).join("");pre=""}
+const tog=id=>{const t=S.tasks.find(x=>x.id===id);t.status=t.status==="done"?"open":"done";save();go(tab)};
+const del=(k,id)=>{S[k]=S[k].filter(x=>x.id!==id);save();go(tab)};
+function addT(){const t=$("#nt").value.trim();if(!t||!$("#nd").value)return alert("Add a title and date");S.tasks.push({id:uid(),title:t,fn:$("#nf").value,owner:$("#no").value.trim(),due:$("#nd").value,status:"open"});save();go("tasks")}
+function addB(){const i=$("#bi").value.trim();if(!i)return;S.spend.push({id:uid(),i,f:$("#bf").value,est:+$("#be").value||0,paid:+$("#bp").value||0});save();go("money")}
+function addG(){const n=$("#gn").value.trim();if(!n)return;S.guests.push({id:uid(),name:n,n:+$("#gc").value||1,side:$("#gs").value,rsvp:"Pending"});save();go("guests")}
+function rs(id){const g=S.guests.find(x=>x.id===id),c=["Pending","Yes","No"];g.rsvp=c[(c.indexOf(g.rsvp)+1)%3];save();go("guests")}
+function starter(){const L={Haldi:[["Book haldi venue & decor",-30],["Finalise haldi outfits (yellow theme)",-20],["Arrange haldi mixture, flowers & props",-5],["Book photographer for haldi",-25]],Sangeet:[["Book DJ / sound & lights",-45],["Choreography rehearsals",-30],["Finalise performance list & MC",-10],["Sangeet outfits & fittings",-20]],Marriage:[["Book venue & caterer",-90],["Send invitations",-45],["Book pandit & confirm muhurat",-30],["Finalise mehendi & makeup artists",-25],["Plan guest stay & transport",-20],["Wedding day emergency kit",-3]]};
+FN.forEach(f=>L[f].forEach(([t,o])=>S.tasks.push({id:uid(),title:t,fn:f,owner:"",due:addD(S.dates[f],o),status:"open"})));save();go("tasks")}
+function dl(n,txt,m){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:m}));a.download=n;a.click()}
+const exp=()=>dl("wedding-backup.json",JSON.stringify(S),"application/json");
+function imp(i){const r=new FileReader();r.onload=()=>{S=JSON.parse(r.result);save();go("home")};r.readAsText(i.files[0])}
+function ics(){const ev=[...S.tasks.map(t=>[t.due,`[${t.fn}] ${t.title} (${t.owner||"-"})`]),...FN.map(f=>[S.dates[f],"★ "+f])];
+dl("wedding.ics","BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"+ev.map(([d,s])=>`BEGIN:VEVENT\r\nUID:${uid()}@shaadi\r\nDTSTAMP:${T.replace(/-/g,"")}T000000Z\r\nDTSTART;VALUE=DATE:${d.replace(/-/g,"")}\r\nSUMMARY:${s}\r\nEND:VEVENT\r\n`).join("")+"END:VCALENDAR","text/calendar")}
+go("home");pull();
+</script></body></html>
